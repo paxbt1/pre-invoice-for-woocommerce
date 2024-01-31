@@ -1,0 +1,46 @@
+ .invoice-btn:hover svg * {
+ fill: #4CAF50 !important;
+ transition: all .3s;
+ }
+
+ .invoice-btn {
+ display: inline-block;
+ width: 100%;
+ height: 100%;
+ margin: 0;
+ }
+
+ a:focus{
+    box-shadow:none !important;
+ }
+ @keyframes spinner {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.custom-spinner:before {
+    content: '';
+    position: absolute;
+    box-sizing: border-box;
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border-top: 2px solid #4CAF50;
+    border-right: 2px solid transparent;
+    animation: spinner .6s linear infinite;
+}
+
+
+ /* .spinner:after {
+    content: "";
+    background: url(/wp-content/plugins/woocommerce/assets/images/wpspin-2x.gif) no-repeat center top;
+    background-size: 71%;
+    display: block;
+    width: 25px;
+    height: 20px;
+}
+.hide{
+    display: none;
+} */

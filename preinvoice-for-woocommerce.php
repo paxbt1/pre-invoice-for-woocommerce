@@ -1,8 +1,8 @@
 <?php
 /*
-Plugin Name: پیشفاکتور ووکامرس
+Plugin Name: پیش‌فاکتور ووکامرس
 Description: Add a 'Download Invoice' button in WooCommerce Cart.
-Version: 1.0
+Version: 1.5
 Author: Saeed Ghourbanian
 */
 
@@ -19,7 +19,7 @@ function add_custom_invoice_button()
     <!-- Adding a spinner element -->
     <script>
         jQuery(document).ready(function($) {
-            $('.generate-pdf-invoice').on('click', function(e) {
+            $(document).on('click', '.generate-pdf-invoice', function(e) {
                 e.preventDefault();
 
                 // Disable the button and show spinner
@@ -30,13 +30,14 @@ function add_custom_invoice_button()
                     type: 'POST',
                     url: "<?= admin_url('admin-ajax.php') ?>", // WordPress AJAX URL
                     data: {
-                        action: 'generate_pdf_invoice',
+                        action: 'generate_pdf_pre_invoice',
                         nonce: "<?= wp_create_nonce('pdfinvoice') ?>",
                         name: $('#name').val(),
                         id: $('#id').val(),
                         postcode: $('#postcode').val(),
                         phone: $('#phone').val(),
-                        address: $('#address').val()
+                        address: $('#address').val(),
+                        gateway_id: $('#payment_gateway_select').val()
                     },
                     success: function(response) {
                         // Convert base64-encoded content to Blob
@@ -68,8 +69,7 @@ function add_custom_invoice_button()
                     }
                 });
             });
-            // Open the modal when the button is clicked
-            $('#openModal').on('click', function() {
+            $(document).on('click', '#openModal', function() {
                 $('#myModal').css('display', 'block');
             });
             $('.close').on('click', function() {
@@ -121,6 +121,21 @@ function add_custom_invoice_button()
             text-align: center;
         }
 
+        @media (max-width:780px) {
+
+            .modal-content {
+                width: 100%;
+            }
+
+            .personal-info {
+                flex-direction: column;
+            }
+
+            .personal-info div {
+                margin-bottom: 10px;
+            }
+        }
+
         .close {
             color: #aaa;
             float: right;
@@ -134,8 +149,15 @@ function add_custom_invoice_button()
             text-decoration: none;
             cursor: pointer;
         }
+
+        .personal-info {
+            display: flex;
+            justify-content: space-between;
+            text-align: right;
+            margin-bottom: 25px;
+        }
     </style>
-    <button id="openModal" class="checkout-button">دریافت پیشفاکتور</button>
+    <button id="openModal" class="checkout-button" style="background:#2BCF9A;">دریافت پیش‌فاکتور</button>
 
     <div id="myModal" class="modal">
         <div class="modal-content">
@@ -143,7 +165,7 @@ function add_custom_invoice_button()
             <span class="close">&times;</span>
             <h2>لطفا مشخصات درخواست دهنده تسهیلات را وارد کنید</h2>
 
-            <div style="display: flex;justify-content: space-between;text-align: right;margin-bottom: 25px;">
+            <div class="personal-info">
                 <div>
                     <label for="name">نام و نام خانوادگی:</label>
                     <input type="text" id="name" name="name">
@@ -170,7 +192,7 @@ function add_custom_invoice_button()
             </div>
 
             <p>
-                <a href="#" class="button alt generate-pdf-invoice checkout-button" style="background: #30c549;">دریافت پیشفاکتور<span class="spinner generate-pdf-spinner" style="display: none;"></span></a>
+                <a href="#" class="button alt generate-pdf-invoice checkout-button" style="background: #2BCF9A;">دریافت پیش‌فاکتور<span class="spinner generate-pdf-spinner" style="display: none;"></span></a>
             </p>
         </div>
     </div>
@@ -182,10 +204,10 @@ function add_custom_invoice_button()
 
 
 // Create an AJAX endpoint to handle the PDF generation
-add_action('wp_ajax_generate_pdf_invoice', 'generate_pdf_invoice_ajax');
-add_action('wp_ajax_nopriv_generate_pdf_invoice', 'generate_pdf_invoice_ajax'); // For non-logged in users
+add_action('wp_ajax_generate_pdf_pre_invoice', 'generate_pdf_pre_invoice_ajax');
+add_action('wp_ajax_nopriv_generate_pdf_pre_invoice', 'generate_pdf_pre_invoice_ajax'); // For non-logged in users
 
-function generate_pdf_invoice_ajax()
+function generate_pdf_pre_invoice_ajax()
 {
     if (!wp_verify_nonce($_POST['nonce'], 'pdfinvoice')) {
         wp_die('Security check error!');
@@ -348,20 +370,25 @@ function generate_pdf_invoice_ajax()
     $cart = WC()->cart->get_cart();
     $total_sum = 0;
 
-
+    if (isset($_POST['gateway_id'])) {
+        $gateway_id = $_POST['gateway_id'];
+        $naghd_over = isset(get_option('woocommerce_' . $gateway_id . '_settings')['naghd_over']) ? get_option('woocommerce_' . $gateway_id . '_settings')['naghd_over'] : '';
+        $naghd_over = floatval($naghd_over);
+    }
     $i = 1;
 
     foreach ($cart as $item_key => $item) {
         $product = $item['data'];
         $product_name = $product->get_name();
-        $product_price = $product->get_price(); // Multiply price by 2
+        $product_price = $product->get_price();
+        $new_price = $product_price + ($product_price * ($naghd_over / 100));
         $quantity = $item['quantity'];
-        $total_sum += $product_price * $quantity;
+        $total_sum += $new_price * $quantity;
         $html .=    '<tr class="info-table">
                     <td>' . $i . '</td>
                     <td colspan="2">' . $product_name . '</td>
                     <td>' . $quantity . '</td>
-                    <td colspan="2">' . number_format($product_price) . '</td>
+                    <td colspan="2">' . number_format($new_price) . '</td>
                 </tr>';
 
         $i++;
@@ -376,10 +403,279 @@ function generate_pdf_invoice_ajax()
             <th colspan="3" >' . $total_sum . ' تومان </th>
         </tr>
     </table>
-    <p style="direction:rtl; text-align:right;">اعتبار این پیشفاکتور ۲۴ ساعت بوده و فروشگاه هیچ گونه مسئولیتی بابت تغییر قیمت کالا پس از آن ندارد.</p>
-    </body>
+    <br>
+    <p style="direction:rtl; text-align:right; font-size:14px;">اعتبار این پیش‌فاکتور ۲۴ ساعت بوده و فروشگاه هیچ گونه مسئولیتی بابت تغییر قیمت کالا پس از آن ندارد.</p>
+</body>
 
-    </html>';
+</html>';
+    // wp_die($html);
+    $mpdf->WriteHTML($html);
+    ob_clean();
+    // Output the PDF as a download
+    $pdf_content = $mpdf->Output('invoice.pdf', \Mpdf\Output\Destination::STRING_RETURN);
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="invoice.pdf"');
+    echo base64_encode($pdf_content);
+    exit;
+}
+
+
+//====================================================
+// ستون مشتری سفارش
+//====================================================
+
+add_filter('manage_shop_order_posts_columns', function ($columns) {
+    $x = new WC_GolrangLeasing;
+    if ($x->show_loanstatus) {
+        $columns['order_invoice'] = __('فاکتور', 'golrang-leasing-payment-for-woocommerce');
+    }
+    return $columns;
+}, 666);
+
+add_action('manage_shop_order_posts_custom_column', function ($column, $order_id) {
+    if ($column == 'order_invoice') {
+        // Get user ID from order meta
+        echo '<a href="#" class="invoice-btn" id=' . $order_id . '><svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="arrow-down-to-line" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" class="svg-inline--fa fa-arrow-down-to-line fa-fw fa-lg"><path fill="currentColor" d="M32 480c-17.7 0-32-14.3-32-32s14.3-32 32-32H352c17.7 0 32 14.3 32 32s-14.3 32-32 32H32zM214.6 342.6c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 242.7V64c0-17.7 14.3-32 32-32s32 14.3 32 32V242.7l73.4-73.4c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3l-128 128z" class=""></path></svg></a><span class="custom-spinner generate-pdf-spinner" style="float: right;height: 37px;background: red;display:none;">';
+    }
+}, 666, 2);
+
+
+
+function enqueue_custom_script_for_orders_list()
+{
+    // Check if it's the admin and on the WooCommerce orders list page
+    if (is_admin()) {
+        // Enqueue your script.js file
+        wp_enqueue_script('script', plugin_dir_url(__FILE__) . '/assets/script.js', array('jquery'), false, true);
+        // Pass the admin-ajax.php URL to the script
+        wp_localize_script(
+            'script',
+            'ajax_object',
+            array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('pdfinvoice'),
+            )
+        );
+
+        wp_enqueue_style('style', plugin_dir_url(__FILE__) . '/assets/style.css');
+    }
+}
+
+add_action('admin_enqueue_scripts', 'enqueue_custom_script_for_orders_list');
+
+
+//=============================================================
+
+// Create an AJAX endpoint to handle the PDF generation
+add_action('wp_ajax_generate_pdf_invoice', 'generate_pdf_invoice_ajax');
+add_action('wp_ajax_nopriv_generate_pdf_invoice', 'generate_pdf_invoice_ajax'); // For non-logged in users
+
+function generate_pdf_invoice_ajax()
+{
+    if (!wp_verify_nonce($_POST['nonce'], 'pdfinvoice')) {
+        wp_die('Security check error!');
+    }
+
+    // Load WooCommerce
+    if (!class_exists('WooCommerce')) {
+        include_once WC_ABSPATH . 'includes/wc-core-functions.php';
+        include_once WC_ABSPATH . 'includes/class-wc-cart.php';
+        include_once WC_ABSPATH . 'includes/class-wc-checkout.php';
+    }
+
+    // require_once(get_stylesheet_directory() . 'vendor/autoload.php'); // Path to mPDF autoload file
+    require_once __DIR__ . '/vendor/autoload.php';
+
+    $formatter = new IntlDateFormatter(
+        "fa_IR@calendar=persian",
+        IntlDateFormatter::FULL,
+        IntlDateFormatter::FULL,
+        'Asia/Tehran',
+        IntlDateFormatter::TRADITIONAL,
+        "yyyy/MM/dd"
+    );
+    $now = new DateTime();
+
+    $defaultConfig = (new Mpdf\Config\ConfigVariables())->getDefaults();
+    $fontDirs = $defaultConfig['fontDir'];
+
+    $defaultFontConfig = (new Mpdf\Config\FontVariables())->getDefaults();
+    $fontData = $defaultFontConfig['fontdata'];
+
+    $mpdf = new \Mpdf\Mpdf([
+        'mode' => 'utf-8',
+        'format' => 'A4',
+
+        'fontDir' => array_merge($fontDirs, [__DIR__]),
+        'fontdata' => $fontData +
+            [
+                'vazir' => [
+                    'R' => 'assets/Vazirmatn-Regular.ttf',
+                ],
+                'inkfree' => [
+                    'R' => 'assets/Vazirmatn-Bold.ttf',
+                ],
+            ],
+    ]);
+    $mpdf->SetDisplayMode('fullpage');
+
+    $order = wc_get_order($_POST['order_id']);
+
+
+    ob_clean();
+
+    $html = '
+    <!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        table {
+            direction: rtl;
+            width: 100%;
+        }
+        th, td {
+            padding: 8px;
+            text-align: right;
+            font-size: 10px;
+            font-weight: 500;
+            line-height: 16px;
+            
+        }
+        th{
+            padding: 10px;
+            text-align: right;
+            font-size: 10px;
+            font-weight: 500;
+            line-height: 16px;
+        }
+        .seller {
+            display: table;
+            padding: 8px;
+            background: #E3E3E3;
+            margin: 0;
+            width: 100%;
+            font-size: 10px;
+            font-weight: 500;
+            line-height: 16px;
+            text-align: right;
+        }
+        .info-table td{
+            border:0.1mm solid #3D3D3D;
+            border-collapse: collapse !important; 
+            border-spacing: 0px;
+        }
+    </style>
+</head>
+    <body>
+    
+    <table style="direction: rtl;" autosize="2.4">
+    <tr>
+    
+        <th style="font-size:14px;"><img style="vertical-align: top" src="' . __DIR__ . '/assets/alpha.png" width="129" /></th>    
+        <th style="font-size:14px;" >فاکتور فروش کالا و خدمات</th>
+        <th style="direction:rtl;font-size: 12px;font-weight: 400;line-height: 19px;letter-spacing: 0em;text-align: right;" >تاریخ: ' . $formatter->format($now) . '</th>
+    </tr>
+    </table>
+
+    <table>
+    <tr class="seller" style="display: table; padding: 8px;background: #E3E3E3;margin: 0;width: 100%;font-size: 10px;font-weight: 500;line-height: 16px;letter-spacing: 0em;text-align: right;">
+        <td>فروشنده:</td>
+        
+    </tr>
+    </table>
+    <table style="background:#F3F3F3;">
+    <tr>
+        <td>نام شخص حقیقی/حقوقی: مهر آوران بازار نوین</td>
+        <td>شماره ثبت: 570695</td>
+        <td>شناسه اقتصادی: 14009694200</td>
+        <td>شناسه ملی: 14009694200</td>
+    </tr>
+        <tr>
+            <td>تلفن: 021-22957274</td>
+            <td>کد پستی: 1667716365</td>
+            <td colspan="2">نشانی: تهران میدان هروی بلوار پناهی نیا بین دهم و دوازدهم پلاک ۷۷ واحد ۲ </td>
+        </tr>
+        </table>
+        <table>
+    <tr class="seller" style="display: table; padding: 0px;border:0;background: #E3E3E3;margin: 0;width: 100%;font-size: 10px;font-weight: 500;line-height: 16px;letter-spacing: 0em;text-align: right;">
+        <td colspan="4">خریدار:</td>
+    </tr>
+    </table>
+    <table style="background:#F3F3F3;margin:0;padding:0;">
+        <tr>
+            <td colspan="2">نام شخص حقیقی/حقوقی:' . $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() . '</td>
+        <td>کد ملی: ' . $order->get_meta('_billing_national_id') . '</td>
+        <td colspan="2">کد پستی: ' . $order->get_shipping_postcode() . '</td>
+        <td colspan="2">شماره تماس: ' . $order->get_meta('_billing_phone') . '        </td>
+        <tr>
+            
+        <td>نشانی: ' . $order->get_shipping_address_1() . '</td>
+        </tr>
+        </table>
+        <table>
+        <tr class="seller" style="display: table; padding: 8px;background: #E3E3E3;margin: 0;width: 100%;font-size: 10px;font-weight: 500;line-height: 16px;letter-spacing: 0em;text-align: right;">
+            <th colspan="4">مشخصات کالا یا خدمات موردمعامله:</th>
+        </tr>
+        </table>
+        <table>
+        <tr class="seller" style="display: table; padding: 8px;margin: 0;width: 100%;font-size: 10px;font-weight: 500;line-height: 16px;letter-spacing: 0em;text-align: right;"> 
+            <th>ردیف</th>
+            <th colspan="2">کالا</th>
+            <th>تعداد</th>
+            <th colspan="2">قیمت فی (تومان)</th>
+        </tr>';
+
+
+    $total_sum = 0;
+
+
+    // Get the order object
+
+
+    if ($order) {
+        $i = 1;
+
+        foreach ($order->get_items() as $item_id => $item) {
+            $product = $item->get_product();
+            $product_name = $product->get_name();
+            $product_price = $product->get_price(); // Multiply price by 2
+            $new_price = $product_price + ($product_price * ($naghd_over / 100));
+            $quantity = $item->get_quantity();
+            $total_sum += $new_price * $quantity;
+            $html .=    '<tr class="info-table">
+                                <td>' . $i . '</td>
+                                <td colspan="2">' . $product_name . '</td>
+                                <td>' . $quantity . '</td>
+                                <td colspan="2">' . number_format($new_price) . '</td>
+                            </tr>';
+
+            $i++;
+        }
+
+        $total_sum = number_format($total_sum);
+    }
+
+
+    $html .= '
+    </table>
+        <table>
+     <tr class="seller" style="display: table; padding: 8px;background: #E3E3E3;margin: 0;width: 100%;font-size: 10px;font-weight: 500;line-height: 16px;letter-spacing: 0em;text-align: right;">
+            <th colspan="3">مجموع: </th>
+            <th colspan="3" >' . $total_sum . ' تومان </th>
+        </tr>
+    </table>
+    
+</body>
+
+</html>';
     // wp_die($html);
     $mpdf->WriteHTML($html);
     ob_clean();
