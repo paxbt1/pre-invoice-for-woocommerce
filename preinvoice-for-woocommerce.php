@@ -6,12 +6,84 @@ Version: 1.5
 Author: Saeed Ghourbanian
 */
 
-// if (!defined('ABS_PATH')) {
-//     exit; // Exit if accessed directly
-// }
+if (!defined('ABSPATH')) {
+     exit; // Exit if accessed directly
+}
+
+
+// Add admin menu
+add_action('admin_menu', 'invoice_plugin_admin_menu');
+
+function invoice_plugin_admin_menu() {
+    add_options_page(
+        'تنظیمات پیش فاکتور', // Page title
+        'تنظیمات پیش فاکتور', // Menu title
+        'manage_options', // Capability
+        'invoice-plugin-settings', // Menu slug
+        'invoice_plugin_settings_page' // Callback function
+    );
+}
+
+// Define settings fields and register them
+function invoice_plugin_settings_init() {
+    register_setting(
+        'invoice_plugin_settings_group', // Option group
+        'enable_proceed_to_checkout_hook' // Option name
+    );
+
+    add_settings_section(
+        'invoice_plugin_settings_section', // ID
+        'Plugin Settings', // Title
+        'invoice_plugin_settings_section_cb', // Callback function
+        'invoice-plugin-settings' // Page
+    );
+
+    add_settings_field(
+        'enable_proceed_to_checkout_hook', // ID
+        'Enable Proceed to Checkout Hook', // Title
+        'enable_proceed_to_checkout_hook_cb', // Callback function
+        'invoice-plugin-settings', // Page
+        'invoice_plugin_settings_section' // Section
+    );
+}
+add_action('admin_init', 'invoice_plugin_settings_init');
+
+// Section callback
+function invoice_plugin_settings_section_cb() {
+    echo '<p>Configure settings for the Invoice Plugin</p>';
+}
+
+// Checkbox field callback
+function enable_proceed_to_checkout_hook_cb() {
+    $enable_proceed_to_checkout_hook = get_option('enable_proceed_to_checkout_hook');
+    echo '<input type="checkbox" id="enable_proceed_to_checkout_hook" name="enable_proceed_to_checkout_hook" value="1" ' . checked(1, $enable_proceed_to_checkout_hook, false) . '/>';
+}
+
+// Settings page callback
+function invoice_plugin_settings_page() {
+    ?>
+    <div class="wrap">
+        <h2>Invoice Plugin Settings</h2>
+        <form method="post" action="options.php">
+            <?php settings_fields('invoice_plugin_settings_group'); ?>
+            <?php do_settings_sections('invoice-plugin-settings'); ?>
+            <?php submit_button('Save Settings'); ?>
+        </form>
+    </div>
+    <?php
+}
 
 // Add a custom button after the cart table
-add_action('woocommerce_proceed_to_checkout', 'add_custom_invoice_button');
+
+add_shortcode('pre-invoice','add_custom_invoice_button');
+// Function to add custom invoice button
+
+$enable_proceed_to_checkout_hook = get_option('enable_proceed_to_checkout_hook');
+if ($enable_proceed_to_checkout_hook) {
+	add_action('woocommerce_proceed_to_checkout', 'add_custom_invoice_button');
+}
+
+
 function add_custom_invoice_button()
 {
 
@@ -156,8 +228,25 @@ function add_custom_invoice_button()
             text-align: right;
             margin-bottom: 25px;
         }
+		#openModal {
+    position: relative;
+    padding-left: 25px; /* Adjust as needed */
+}
+
+#openModal::before {
+    content: '';
+    position: absolute;
+    right: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px; /* SVG width */
+    height: 18px; /* SVG height */
+    background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M16.5 4.5V6.315C16.5 7.5 15.75 8.25 14.565 8.25H12V3.0075C12 2.175 12.6825 1.5 13.515 1.5C14.3325 1.5075 15.0825 1.8375 15.6225 2.3775C16.1625 2.925 16.5 3.675 16.5 4.5Z" stroke="%23446EFF" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 5.25V15.75C1.5 16.3725 2.205 16.725 2.7 16.35L3.9825 15.39C4.2825 15.165 4.7025 15.195 4.9725 15.465L6.2175 16.7175C6.51 17.01 6.99 17.01 7.2825 16.7175L8.5425 15.4575C8.805 15.195 9.225 15.165 9.5175 15.39L10.8 16.35C11.295 16.7175 12 16.365 12 15.75V3C12 2.175 12.675 1.5 13.5 1.5H5.25H4.5C2.25 1.5 1.5 2.8425 1.5 4.5V5.25Z" stroke="%23446EFF" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.75 9.75757H9" stroke="%23446EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.75 6.75757H9" stroke="%23446EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.49609 9.75H4.50358" stroke="%23446EFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.49609 6.75H4.50358" stroke="%23446EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+    background-repeat: no-repeat;
+}
+
     </style>
-    <button id="openModal" class="checkout-button" style="background:#2BCF9A;">دریافت پیش‌فاکتور</button>
+    <button id="openModal" class="checkout-button" style="background: transparent;color: #446EFF;">دریافت پیش‌فاکتور</button>
 
     <div id="myModal" class="modal">
         <div class="modal-content">
@@ -687,3 +776,4 @@ function generate_pdf_invoice_ajax()
     echo base64_encode($pdf_content);
     exit;
 }
+
